@@ -27,6 +27,9 @@ body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkM
 header { padding:8px 0 2px; display:flex; align-items:center; justify-content:space-between; }
 .hdate { font-size:13px; color:var(--hint); }
 .hstreak { font-size:13px; color:var(--orange); }
+.mail-btn { background:none; border:none; cursor:pointer; padding:2px 4px; font-size:20px; line-height:1; color:var(--hint); transition:color .15s; display:flex; align-items:center; }
+.mail-btn:hover { color:var(--sub); }
+.mail-btn:active { transform:scale(.9); }
 
 /* ── Flash overlay ── */
 .flash-overlay { position:fixed; inset:0; z-index:500; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; pointer-events:none; opacity:0; }
@@ -208,6 +211,7 @@ body.light .days-panel  { background:var(--bg2); border:1px solid var(--sep); }
   <!-- CHECK-IN -->
   <div class="view on" id="view-checkin">
     <header>
+      <button class="mail-btn" onclick="sendRecapMail(true)" title="Envoyer l'historique par mail">📩</button>
       <div class="hdate" id="hdr-date"></div>
       <div class="hstreak">🔥 <span id="streak-n">0</span></div>
     </header>
@@ -343,7 +347,7 @@ body.light .days-panel  { background:var(--bg2); border:1px solid var(--sep); }
         <div class="ai-period" id="ai-period"></div>
       </div>
       <div class="ai-key-row">
-        <input class="ai-key-input" id="ai-key-input" type="password" placeholder="Clé API OpenRouter (sk-or-…)">
+        <input class="ai-key-input" id="ai-key-input" type="password" placeholder="Clé API Gemini (AIzaSy…)">
         <button class="ai-key-save" onclick="saveKey()">Sauver</button>
       </div>
       <button class="ai-btn" id="ai-btn" onclick="runAI()">✦ Analyser ma semaine</button>
@@ -463,48 +467,75 @@ function save(){
   const other=P==='coco'?'lili':'coco';
   const otherDone=getDBFor(other).some(e=>e.date===selectedDate);
   // Trigger weekly mail on Sunday when both profiles done
-  const isSunday = new Date(selectedDate+'T12:00:00').getDay()===0;
   if(otherDone){
     showFlash(true,'À demain !',()=>{
       selectedDate=todayStr();
       switchTab('stats');
-      if(isSunday) setTimeout(sendWeeklyMail, 400);
+      if(shouldSendMail()) setTimeout(sendRecapMail, 600);
     });
   } else {
     showFlash(false,'',()=>{switchProfile(other);});
   }
 }
 
-function sendWeeklyMail(){
-  const DEST='comacke67@gmail.com';
-  const me=['','😞','😕','😐','🙂','😄'];
-  const fmtDate=d=>{const[,m,day]=d.split('-');const n=['jan','fév','mar','avr','mai','juin','juil','aoû','sep','oct','nov','déc'];return parseInt(day)+' '+n[parseInt(m)-1];};
-  const fmtEntry=e=>{
-    const parts=[];
-    if(e.sport >0) parts.push('Sport: '+e.sport+'/3');
-    if(e.meals >0) parts.push('Repas: '+e.meals+'/3');
-    if(e.sleep >0) parts.push('Sommeil: '+e.sleep+'/3');
-    if(e.stress>0) parts.push('Stress: '+e.stress+'/3');
-    if(e.mood  >0) parts.push('Humeur: '+me[e.mood]);
-    return fmtDate(e.date)+' — '+parts.join(', ')+' ('+e.points+' pts)';
-  };
-  let body='Récap de la semaine — Ma Journée\n\n';
-  ['coco','lili'].forEach(pr=>{
-    const db=getDBFor(pr);
-    const name=pr==='coco'?'Coco':'Lili';
-    // Last 7 entries
-    const week=db.slice(0,7).reverse();
-    const totalWeek=week.reduce((s,e)=>s+(e.points||0),0);
-    body+=name.toUpperCase()+'\n';
-    if(!week.length){body+='Aucune entrée cette semaine.\n';}
-    else{week.forEach(e=>{body+=fmtEntry(e)+'\n';});}
-    body+='Total semaine : '+totalWeek+' pts\n\n';
-  });
-  const subject=encodeURIComponent('Ma Journée — Récap semaine du '+fmtDate(new Date().toISOString().slice(0,10)));
-  const encodedBody=encodeURIComponent(body);
-  window.location.href='mailto:'+DEST+'?subject='+subject+'&body='+encodedBody;
+const MAIL_DEST = 'comacke67@gmail.com';
+const MAIL_LAST_KEY = 'mj_last_mail';
+const MAIL_INTERVAL_DAYS = 3;
+
+function shouldSendMail() {
+  const last = localStorage.getItem(MAIL_LAST_KEY);
+  if (!last) return true;
+  const daysSince = (Date.now() - parseInt(last)) / (1000 * 60 * 60 * 24);
+  return daysSince >= MAIL_INTERVAL_DAYS;
 }
 
+function sendRecapMail(force) {
+  if (!force && !shouldSendMail()) return;
+  const fmtDate = d => {
+    const [,m,day] = d.split('-');
+    const n = ['jan','fev','mar','avr','mai','juin','juil','aou','sep','oct','nov','dec'];
+    return parseInt(day)+' '+n[parseInt(m)-1];
+  };
+  const fmtEntry = e => {
+    const parts = [];
+    if (e.sport  > 0) parts.push('Sport: '+e.sport+'/3');
+    if (e.meals  > 0) parts.push('Repas: '+e.meals+'/3');
+    if (e.sleep  > 0) parts.push('Sommeil: '+e.sleep+'/3');
+    if (e.stress > 0) parts.push('Stress: '+e.stress+'/3');
+    if (e.mood   > 0) parts.push('Humeur: '+e.mood+'/3');
+    return fmtDate(e.date)+' - '+parts.join(', ')+' ('+e.points+' pts)';
+  };
+  const today = new Date();
+  const dateStr = String(today.getDate()).padStart(2,'0')+'/'+String(today.getMonth()+1).padStart(2,'0')+'/'+today.getFullYear();
+  const lines = [];
+  lines.push('Recap Ma Journee - '+dateStr);
+  lines.push('================================');
+  lines.push('');
+  ['coco','lili'].forEach(pr => {
+    const db = getDBFor(pr);
+    const name = pr==='coco' ? 'COCO' : 'LILI';
+    const recent = db.slice().reverse();
+    const totalPts = db.reduce((s,e) => s+(e.points||0), 0);
+    const set = new Set(db.map(e=>e.date));
+    let streak=0, d=new Date();
+    if (!set.has(todayStr())) d.setDate(d.getDate()-1);
+    while(true){const k=d.toISOString().slice(0,10);if(set.has(k)){streak++;d.setDate(d.getDate()-1);}else break;}
+    lines.push(name);
+    lines.push('Streak: '+streak+' jours | Total: '+totalPts+' pts');
+    if (!recent.length) {
+      lines.push('Aucune entree recente.');
+    } else {
+      recent.forEach(e => lines.push('  '+fmtEntry(e)));
+    }
+    lines.push('');
+  });
+  lines.push('================================');
+  lines.push('Genere par Ma Journee');
+  const body = lines.join('%0A');
+  const subject = encodeURIComponent('Ma Journee - Recap du '+dateStr);
+  localStorage.setItem(MAIL_LAST_KEY, Date.now().toString());
+  window.location.href = 'mailto:'+MAIL_DEST+'?subject='+subject+'&body='+body;
+}
 function showFlash(double,msg,callback){
   const overlay=document.getElementById('flash-overlay');
   const checks=document.getElementById('flash-checks');
@@ -699,7 +730,7 @@ Données :${dataSummary}`;
 async function runAI(){
   const key=localStorage.getItem(AI_KEY_STORE);
   if(!key){
-    document.getElementById('ai-text').textContent='Entre ta clé API OpenRouter ci-dessous pour activer l\'analyse IA.';
+    document.getElementById('ai-text').textContent='Entre ta clé API Gemini ci-dessous pour activer l\'analyse IA.';
     return;
   }
   const prompt=buildPrompt();
@@ -715,23 +746,20 @@ async function runAI(){
   document.getElementById('ai-period').textContent='';
 
   try{
-    const res=await fetch('https://openrouter.ai/api/v1/chat/completions',{
-      method:'POST',
-      headers:{
-        'Content-Type':'application/json',
-        'Authorization':'Bearer '+key,
-        'HTTP-Referer':'https://ma-journee.app',
-        'X-Title':'Ma Journée'
-      },
-      body:JSON.stringify({
-        model:'meta-llama/llama-3.1-8b-instruct:free',
-        max_tokens:300,
-        messages:[{role:'user',content:prompt}]
-      })
-    });
+    const res=await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key='+encodeURIComponent(key),
+      {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          contents:[{role:'user',parts:[{text:prompt}]}],
+          generationConfig:{maxOutputTokens:300,temperature:0.7}
+        })
+      }
+    );
     if(!res.ok){const err=await res.json();throw new Error(err.error?.message||res.statusText);}
     const data=await res.json();
-    const result=data.choices?.[0]?.message?.content?.trim()||'Pas de réponse.';
+    const result=data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||'Pas de réponse.';
     textEl.className='ai-text';
     textEl.textContent=result;
 
