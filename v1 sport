@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mon Tracker Sportif</title>
+  <style>
+    /* ------------------ RESET ------------------ */
+    * { margin:0; padding:0; box-sizing:border-box; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background: #f5f5f7; color: #1c1c1e; min-height: 100vh; display:flex; flex-direction:column; }
+
+    /* ------------------ HEADER ------------------ */
+    header { padding: 20px; text-align:center; font-size: 1.5rem; font-weight: 600; background: #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+
+    /* ------------------ NAV ------------------ */
+    nav { display:flex; justify-content:space-around; background:#fff; box-shadow: 0 1px 4px rgba(0,0,0,0.05); }
+    nav button { background:none; border:none; padding:15px; font-size:1rem; cursor:pointer; transition:0.2s; }
+    nav button.active { border-bottom: 2px solid #007aff; font-weight:600; }
+
+    /* ------------------ SECTIONS ------------------ */
+    section { flex:1; padding:20px; display:none; overflow-y:auto; }
+    section.active { display:block; }
+
+    /* ------------------ BUTTONS ------------------ */
+    button { cursor:pointer; border:none; border-radius:10px; padding:10px 20px; background:#007aff; color:#fff; font-weight:600; transition:0.2s; }
+    button:hover { background:#005ecb; }
+
+    /* ------------------ CARDS ------------------ */
+    .card { background:#fff; padding:15px; border-radius:15px; margin-bottom:15px; box-shadow:0 2px 10px rgba(0,0,0,0.05); display:flex; justify-content:space-between; align-items:center; }
+
+    /* ------------------ FORM ------------------ */
+    input, select { padding:10px; border-radius:10px; border:1px solid #ccc; width:100%; margin-bottom:10px; }
+
+    /* ------------------ HISTO ------------------ */
+    .history-item { display:flex; justify-content:space-between; padding:10px 0; border-bottom:1px solid #eee; }
+
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <header>Mon Tracker Sportif</header>
+
+  <!-- NAV -->
+  <nav>
+    <button class="nav-btn active" data-target="home">Accueil</button>
+    <button class="nav-btn" data-target="history">Historique</button>
+    <button class="nav-btn" data-target="settings">Paramètres</button>
+  </nav>
+
+  <!-- ACCUEIL -->
+  <section id="home" class="active">
+    <h2>Programme en cours</h2>
+    <div id="current-program"></div>
+    <button id="next-exercise" style="display:none;">Exercice suivant ✅</button>
+
+    <h3>Lancer un programme</h3>
+    <div id="program-list"></div>
+  </section>
+
+  <!-- HISTORIQUE -->
+  <section id="history">
+    <h2>Historique des sessions</h2>
+    <div id="history-list"></div>
+  </section>
+
+  <!-- PARAMÈTRES -->
+  <section id="settings">
+    <h2>Créer une routine</h2>
+    <input type="text" id="routine-name" placeholder="Nom du programme">
+    <textarea id="routine-exercises" placeholder="Exercices (séparés par des virgules)"></textarea>
+    <button id="save-routine">Sauvegarder le programme</button>
+
+    <h3>Programmes existants</h3>
+    <div id="saved-routines"></div>
+  </section>
+
+  <!-- JS -->
+  <script>
+    // ------------------ NAVIGATION ------------------
+    const navButtons = document.querySelectorAll('.nav-btn');
+    const sections = document.querySelectorAll('section');
+    navButtons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        navButtons.forEach(b=>b.classList.remove('active'));
+        sections.forEach(s=>s.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.target).classList.add('active');
+      });
+    });
+
+    // ------------------ LOCAL STORAGE ------------------
+    let routines = JSON.parse(localStorage.getItem('routines') || '[]');
+    let history = JSON.parse(localStorage.getItem('history') || '[]');
+
+    const programListDiv = document.getElementById('program-list');
+    const savedRoutinesDiv = document.getElementById('saved-routines');
+    const historyListDiv = document.getElementById('history-list');
+    const currentProgramDiv = document.getElementById('current-program');
+    const nextBtn = document.getElementById('next-exercise');
+
+    let currentProgram = null;
+    let currentExerciseIndex = 0;
+
+    // ------------------ FUNCTIONS ------------------
+    function renderRoutines() {
+      programListDiv.innerHTML = '';
+      savedRoutinesDiv.innerHTML = '';
+      routines.forEach((routine, i) => {
+        const btn = document.createElement('button');
+        btn.textContent = routine.name;
+        btn.addEventListener('click', () => startProgram(i));
+        programListDiv.appendChild(btn);
+
+        const div = document.createElement('div');
+        div.textContent = routine.name + ' : ' + routine.exercises.join(', ');
+        savedRoutinesDiv.appendChild(div);
+      });
+    }
+
+    function startProgram(index) {
+      currentProgram = routines[index];
+      currentExerciseIndex = 0;
+      renderCurrentExercise();
+    }
+
+    function renderCurrentExercise() {
+      if(!currentProgram) return;
+      if(currentExerciseIndex >= currentProgram.exercises.length) {
+        currentProgramDiv.innerHTML = '<p>Programme terminé ✅</p>';
+        nextBtn.style.display = 'none';
+        saveHistory(currentProgram.name);
+        currentProgram = null;
+        return;
+      }
+      currentProgramDiv.innerHTML = `
+        <div class="card">
+          <span>${currentProgram.exercises[currentExerciseIndex]}</span>
+          <input type="checkbox" id="done-exercise">
+        </div>
+      `;
+      nextBtn.style.display = 'inline-block';
+    }
+
+    nextBtn.addEventListener('click', () => {
+      const checkbox = document.getElementById('done-exercise');
+      if(!checkbox.checked) {
+        alert('Cochez l’exercice avant de passer au suivant !');
+        return;
+      }
+      currentExerciseIndex++;
+      renderCurrentExercise();
+    });
+
+    function saveHistory(programName) {
+      const today = new Date().toLocaleDateString();
+      history.push({date: today, program: programName});
+      localStorage.setItem('history', JSON.stringify(history));
+      renderHistory();
+    }
+
+    function renderHistory() {
+      historyListDiv.innerHTML = '';
+      history.forEach(h => {
+        const div = document.createElement('div');
+        div.className = 'history-item';
+        div.innerHTML = `<span>${h.date}</span><span>${h.program}</span>`;
+        historyListDiv.appendChild(div);
+      });
+    }
+
+    document.getElementById('save-routine').addEventListener('click', () => {
+      const name = document.getElementById('routine-name').value.trim();
+      const exercises = document.getElementById('routine-exercises').value.split(',').map(e => e.trim()).filter(e => e);
+      if(!name || exercises.length === 0) return alert('Nom et exercices requis !');
+      routines.push({name, exercises});
+      localStorage.setItem('routines', JSON.stringify(routines));
+      document.getElementById('routine-name').value = '';
+      document.getElementById('routine-exercises').value = '';
+      renderRoutines();
+    });
+
+    // ------------------ INIT ------------------
+    renderRoutines();
+    renderHistory();
+  </script>
+</body>
+</html>
