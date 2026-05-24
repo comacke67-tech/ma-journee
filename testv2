@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+
+<title>Sport Tracker</title>
+
+<style>
+
+*{
+  margin:0;
+  padding:0;
+  box-sizing:border-box;
+}
+
+body{
+  background:#111;
+  color:white;
+  font-family:Arial,sans-serif;
+  padding:20px;
+}
+
+.container{
+  max-width:500px;
+  margin:auto;
+}
+
+h1{
+  text-align:center;
+  margin-bottom:25px;
+}
+
+.card{
+  background:#1d1d1d;
+  border-radius:20px;
+  padding:20px;
+  margin-bottom:20px;
+}
+
+label{
+  display:block;
+  margin-bottom:8px;
+  color:#aaa;
+}
+
+input{
+  width:100%;
+  padding:16px;
+  border:none;
+  border-radius:14px;
+  background:#2a2a2a;
+  color:white;
+  font-size:18px;
+  margin-bottom:18px;
+}
+
+button{
+  width:100%;
+  padding:16px;
+  border:none;
+  border-radius:14px;
+  background:gold;
+  color:black;
+  font-size:18px;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.month-nav{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:20px;
+}
+
+.month-nav button{
+  width:60px;
+}
+
+.calendar{
+  display:grid;
+  grid-template-columns:repeat(7,1fr);
+  gap:10px;
+}
+
+.day{
+  aspect-ratio:1;
+  background:black;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+
+.day.active{
+  background:gold;
+  color:black;
+  font-weight:bold;
+}
+
+.day.empty{
+  visibility:hidden;
+}
+
+.stats p,
+.details p{
+  margin-top:10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+  <h1>🏆 Sport Tracker</h1>
+
+  <div class="card">
+
+    <label>Pompes</label>
+    <input type="number" id="pushups" min="0" value="0">
+
+    <label>Abdos</label>
+    <input type="number" id="situps" min="0" value="0">
+
+    <button onclick="saveToday()">
+      Enregistrer
+    </button>
+
+  </div>
+
+  <div class="month-nav">
+    <button onclick="changeMonth(-1)">←</button>
+    <h2 id="monthTitle"></h2>
+    <button onclick="changeMonth(1)">→</button>
+  </div>
+
+  <div id="calendar" class="calendar"></div>
+
+  <div class="card details">
+    <h3>Détail du jour</h3>
+
+    <p id="selectedDate">
+      Sélectionne un jour
+    </p>
+
+    <p>
+      Pompes :
+      <span id="detailPushups">0</span>
+    </p>
+
+    <p>
+      Abdos :
+      <span id="detailSitups">0</span>
+    </p>
+
+  </div>
+
+  <div class="card stats">
+
+    <h3>Semaine</h3>
+
+    <p>
+      Pompes :
+      <span id="weekPushups">0</span>
+    </p>
+
+    <p>
+      Abdos :
+      <span id="weekSitups">0</span>
+    </p>
+
+    <br>
+
+    <h3>Mois</h3>
+
+    <p>
+      Pompes :
+      <span id="monthPushups">0</span>
+    </p>
+
+    <p>
+      Abdos :
+      <span id="monthSitups">0</span>
+    </p>
+
+  </div>
+
+</div>
+
+<script>
+
+const STORAGE_KEY = "sport_tracker";
+
+let currentDate = new Date();
+
+function getData(){
+  return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+}
+
+function saveData(data){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+}
+
+function saveToday(){
+
+  const pushups =
+    Number(document.getElementById("pushups").value);
+
+  const situps =
+    Number(document.getElementById("situps").value);
+
+  const today =
+    new Date().toISOString().split("T")[0];
+
+  const data = getData();
+
+  data[today] = {
+    pushups,
+    situps
+  };
+
+  saveData(data);
+
+  alert("Sauvegardé ✅");
+
+  renderCalendar();
+}
+
+function renderCalendar(){
+
+  const calendar =
+    document.getElementById("calendar");
+
+  calendar.innerHTML = "";
+
+  const year =
+    currentDate.getFullYear();
+
+  const month =
+    currentDate.getMonth();
+
+  const firstDay =
+    new Date(year, month, 1).getDay();
+
+  const daysInMonth =
+    new Date(year, month + 1, 0).getDate();
+
+  document.getElementById("monthTitle").innerText =
+    currentDate.toLocaleDateString(
+      "fr-FR",
+      {
+        month:"long",
+        year:"numeric"
+      }
+    );
+
+  const data = getData();
+
+  const offset =
+    firstDay === 0 ? 6 : firstDay - 1;
+
+  for(let i=0;i<offset;i++){
+
+    const empty =
+      document.createElement("div");
+
+    empty.className = "day empty";
+
+    calendar.appendChild(empty);
+  }
+
+  for(let day=1;day<=daysInMonth;day++){
+
+    const div =
+      document.createElement("div");
+
+    div.className = "day";
+
+    div.innerText = day;
+
+    const date =
+      new Date(year, month, day);
+
+    const key =
+      date.toISOString().split("T")[0];
+
+    const entry = data[key];
+
+    if(
+      entry &&
+      (
+        entry.pushups > 0 ||
+        entry.situps > 0
+      )
+    ){
+      div.classList.add("active");
+    }
+
+    div.onclick = () => {
+      showDetails(key);
+    };
+
+    calendar.appendChild(div);
+  }
+
+  renderStats();
+}
+
+function showDetails(key){
+
+  const data = getData();
+
+  const entry =
+    data[key] || {
+      pushups:0,
+      situps:0
+    };
+
+  document.getElementById("selectedDate")
+    .innerText = key;
+
+  document.getElementById("detailPushups")
+    .innerText = entry.pushups;
+
+  document.getElementById("detailSitups")
+    .innerText = entry.situps;
+}
+
+function renderStats(){
+
+  const data = getData();
+
+  let weekPushups = 0;
+  let weekSitups = 0;
+
+  let monthPushups = 0;
+  let monthSitups = 0;
+
+  const now = new Date();
+
+  const monday = new Date(now);
+
+  monday.setDate(
+    now.getDate() -
+    ((now.getDay() + 6) % 7)
+  );
+
+  for(const key in data){
+
+    const date =
+      new Date(key);
+
+    if(
+      date.getMonth() === now.getMonth() &&
+      date.getFullYear() === now.getFullYear()
+    ){
+      monthPushups += data[key].pushups;
+      monthSitups += data[key].situps;
+    }
+
+    if(date >= monday && date <= now){
+      weekPushups += data[key].pushups;
+      weekSitups += data[key].situps;
+    }
+  }
+
+  document.getElementById("weekPushups")
+    .innerText = weekPushups;
+
+  document.getElementById("weekSitups")
+    .innerText = weekSitups;
+
+  document.getElementById("monthPushups")
+    .innerText = monthPushups;
+
+  document.getElementById("monthSitups")
+    .innerText = monthSitups;
+}
+
+function changeMonth(direction){
+
+  currentDate.setMonth(
+    currentDate.getMonth() + direction
+  );
+
+  renderCalendar();
+}
+
+renderCalendar();
+
+</script>
+
+</body>
+</html>
